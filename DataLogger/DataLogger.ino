@@ -39,10 +39,10 @@ const int MPU = 1101000; // MPU6050 I2C address
 float AccX, AccY, AccZ;
 
 
-#define BMP_SCK 13
-#define BMP_MISO 12
-#define BMP_MOSI 11
-#define BMP_CS 10
+//#define BMP_SCK 13
+//#define BMP_MISO 12
+//#define BMP_MOSI 11
+//#define BMP_CS 10
 
 #define SEALEVELPRESSURE_HPA (1013.25)
 
@@ -102,6 +102,10 @@ void loop() {
       if (gps.encode(c)) // Did a new valid sentence come in?
         gpsValueUpdate();
      }
+  }
+  if (! bmp.performReading()) {
+    Serial.println("Failed to perform reading :(");
+    return;
   }
   if(satellites > 3){
     secondsRun++;
