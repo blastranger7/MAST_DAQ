@@ -12,7 +12,7 @@ File myFile;
 Sd2Card card;
 SdVolume volume;
 SdFile root;
-const int chipSelect = 10;
+const int chipSelect = 4;
  
 //these are for file name creation change baseName to whatever name you want.
 //baseName cannot be longer than 6 charactars
@@ -25,7 +25,7 @@ int secondsRun = 0;
 
 //gps setup
 TinyGPS gps;
-SoftwareSerial ss(3, 4);//software serial pins RX,TX
+SoftwareSerial ss(2, 3);//software serial pins RX,TX
 
 //gps variables
 //how many hours ahead or behind utc you are. Needs to be configured to display the correct time
