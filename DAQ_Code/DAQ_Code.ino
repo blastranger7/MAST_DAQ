@@ -143,6 +143,12 @@ void updateFile(){
   myFile = SD.open(fileName, FILE_WRITE);
   if (myFile) {
      myFile.print(secondsRun);
+     /*myFile.print(", ");
+     myFile.print(hour+timezone);
+     myFile.print(":");
+     myFile.print(minute);
+     myFile.print(":");
+     myFile.print(second);*/
      myFile.print(", ");
      myFile.print(alt);
      myFile.print(", ");
@@ -152,12 +158,6 @@ void updateFile(){
      myFile.print(",");
      myFile.println(AccZ);
      /*myFile.print(", ");
-     myFile.print(hour+timezone);
-     myFile.print(":");
-     myFile.print(minute);
-     myFile.print(":");
-     myFile.print(second);
-     myFile.print(", ");
      myFile.print(altitude);
      myFile.print(",");
      myFile.print(speed);
@@ -185,7 +185,7 @@ void getAcc(){
   //For a range of +-2g, we need to divide the raw values by 16384, according to the datasheet
   AccX = (Wire.read() << 8 | Wire.read()) / 4096.0; // X-axis value
   AccY = (Wire.read() << 8 | Wire.read()) / 4096.0; // Y-axis value
-  AccZ = (Wire.read() << 8 | Wire.read()) / 4096.0 - 1.07; // Z-axis value 
+  AccZ = (Wire.read() << 8 | Wire.read()) / 4096.0; // Z-axis value 
 }
 
 void getOrient(){
@@ -212,7 +212,6 @@ void getOrient(){
   pitch = 0.96 * gyroAngleY + 0.04 * accAngleY;
 }
 
-/*
 void getGPS(){
   gps.f_get_position(&flat, &flon);
   satellites = gps.satellites() == TinyGPS::GPS_INVALID_SATELLITES ? 0 : gps.satellites();//get number of GPS satellites
@@ -220,4 +219,4 @@ void getGPS(){
   altitude = gps.altitude()/100; //Get altitude from GPD
   gps.get_datetime(&date, &time, &age);
   gps.crack_datetime(&year, &month, &day, &hour, &minute, &second, &hundredths, &age); //update time from GPS
-}*/
+}
