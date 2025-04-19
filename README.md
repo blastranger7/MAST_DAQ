@@ -19,6 +19,8 @@ If the system in turned on and GPS data is all 0s then the likely cause is bad s
 
 .cddx file is used to design the circuit diagram at https://www.circuit-diagram.org/editor/
 
+The SD Card in this system needs to be formatted to FAT32. Most SD cards do not come this way and it is likely third party software is needed if the SD card is over 32GB. Free software can be found to do this, although I've found that **DiskGenius** (https://www.diskgenius.com) works the best (also free).
+
 There is a section in the code with 
 ```
 SoftwareSerial ss(4, 3); //software serial pins RX,TX
