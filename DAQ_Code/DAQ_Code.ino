@@ -16,10 +16,10 @@ float accAngleX, accAngleY, gyroAngleX, gyroAngleY, gyroAngleZ;
 float roll, pitch, yaw;
 float AccErrorX, AccErrorY, GyroErrorX, GyroErrorY, GyroErrorZ;
 float elapsedTime, currentTime, previousTime;
-int c = 0;
 
 // BMP VALUES
 Adafruit_BMP3XX bmp;
+const int BMP = 0x77;
 float alt;
 
 // SD
@@ -27,7 +27,7 @@ File myFile;
 Sd2Card card;
 SdVolume volume;
 SdFile root;
-const int chipSelect = 5;
+const int chipSelect = 10;
 float secondsRun = 0;
 
 #define baseName "flight"
@@ -36,10 +36,10 @@ char fileName[] = baseName "00.csv";
 
 // GPS
 TinyGPS gps;
-SoftwareSerial ss(2, 3);//software serial pins RX,TX
-float timezone = -5;
+SoftwareSerial ss(4, 3);//software serial pins RX,TX
+float timezone = 0;
 float flat, flon,speed,altitude;
-unsigned  long age, date, time;
+unsigned long age, date, time;
 int year;
 byte month, day, hour, minute, second, hundredths,satellites;
 
@@ -58,7 +58,7 @@ void setup() {
   //while (!Serial);
   
 
-  if (!bmp.begin_I2C()) {   // hardware I2C mode, can pass in address & alt Wire
+  /*if (!bmp.begin_I2C()) {   // hardware I2C mode, can pass in address & alt Wire
   //if (! bmp.begin_SPI(BMP_CS)) {  // hardware SPI mode  
   //if (! bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI)) {  // software SPI mode
     Serial.println("Could not find a valid BMP3 sensor, check wiring!");
@@ -68,9 +68,11 @@ void setup() {
   bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
   bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
   bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
-  bmp.setOutputDataRate(BMP3_ODR_50_HZ);
+  bmp.setOutputDataRate(BMP3_ODR_50_HZ);*/
 
- card.init(SPI_HALF_SPEED,chipSelect);//SD card initialization
+  Serial.print("Simple TinyGPS library v. "); Serial.println(TinyGPS::library_version());
+  Serial.println();
+  card.init(SPI_HALF_SPEED,chipSelect);//SD card initialization
   if (SD.begin(chipSelect)){
     Serial.println("SD card is ready to use.");
   } 
@@ -85,40 +87,41 @@ void loop() {
   bool newData = false;
   unsigned long chars;
   unsigned short sentences, failed;
-  if (! bmp.performReading()) {
-    Serial.println("Failed to perform reading :(");
+  /*if (! bmp.performReading()) {
+    Serial.println("Failed to perform reading");
     return;
-  }
-  secondsRun += 0.5;
-  getAlt();
+  }*/
+  //getAlt();
   getAcc();
   //getOrient();
-  /*for (unsigned long start = millis(); millis() - start < 1000;)
+  for (unsigned long start = millis(); millis() - start < 1000;)
   {
     while (ss.available())
     {
       char c = ss.read();
-      // Serial.write(c); // uncomment this line if you want to see the GPS data flowing
+      //Serial.write(c); // uncomment this line if you want to see the GPS data flowing
       if (gps.encode(c)) // Did a new valid sentence come in?
         getGPS();
      }
-  }*/
+  }
   updateFile();
  
-
-  Serial.println(alt);
   Serial.print(AccX);
   Serial.print("/");
   Serial.print(AccY);
   Serial.print("/");
   Serial.println(AccZ);
-  Serial.print(pitch);
+  //Serial.println(alt);
+  Serial.print(altitude);
   Serial.print("/");
-  Serial.print(roll);
+  Serial.print(speed);
   Serial.print("/");
-  Serial.println(yaw);
-  Serial.println();
-  delay(500);
+  Serial.print(satellites);
+  Serial.print("/");
+  Serial.print(flat == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : flat, 6);
+  Serial.print("/");
+  Serial.println(flon == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : flon, 6);
+  //delay(1000);
 }
 
 void fileSetup(){
@@ -135,29 +138,29 @@ void fileSetup(){
     }
   }
   myFile = SD.open(fileName, FILE_WRITE);
-  myFile.println("Time (s),Altitude (m),AccX,AccY,AccZ");//,Time,GPS Altitude,Speed,GPS Sats,Lat,Long");//column labeling
+  myFile.println("Time,AccX,AccY,AccZ,Altitude(m),Speed,Satellites,Latitude,Longitude");//,Time,GPS Altitude,Speed,GPS Sats,Lat,Long");//column labeling
   myFile.close();
 }
 
 void updateFile(){
   myFile = SD.open(fileName, FILE_WRITE);
   if (myFile) {
-     myFile.print(secondsRun);
-     /*myFile.print(", ");
+     //myFile.print(secondsRun);
+     //myFile.print(", ");
      myFile.print(hour+timezone);
      myFile.print(":");
      myFile.print(minute);
      myFile.print(":");
-     myFile.print(second);*/
-     myFile.print(", ");
-     myFile.print(alt);
-     myFile.print(", ");
+     myFile.print(second);
+     myFile.print(",");
      myFile.print(AccX);
      myFile.print(",");
      myFile.print(AccY);
      myFile.print(",");
-     myFile.println(AccZ);
-     /*myFile.print(", ");
+     myFile.print(AccZ);
+     myFile.print(",");
+     //myFile.print(alt);
+     //myFile.print(", ");
      myFile.print(altitude);
      myFile.print(",");
      myFile.print(speed);
@@ -166,16 +169,16 @@ void updateFile(){
      myFile.print(",");
      myFile.print(flat == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : flat, 6);
      myFile.print(",");
-     myFile.println(flon == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : flon, 6);*/
+     myFile.println(flon == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : flon, 6);
   }else{
     Serial.println("Write failure");
   }
   myFile.close();
 }
 
-void getAlt(){
+/*void getAlt(){
   alt = bmp.readAltitude(SEALEVELPRESSURE_HPA);
-}
+}*/
 
 void getAcc(){
   Wire.beginTransmission(MPU);
