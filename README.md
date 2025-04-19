@@ -5,8 +5,11 @@ Intended to gather altitude, accelleration, and GPS data and save it to a SD car
 
 ### Hardware
 > Arduino Uno
+
 > GT-U7  GPS Module
+
 > MPU6050 Accelerometer
+
 > Micro SD Card adapter
 
 ### Notes
