@@ -1,11 +1,45 @@
+//libraries
 #include <Wire.h>
-#include <SPI.h>
-#include <Adafruit_Sensor.h>
-#include "Adafruit_BMP3XX.h"
 #include <SPI.h>
 #include <SD.h>
 #include <SoftwareSerial.h>
 #include <TinyGPS.h>
+#include <FS.h>
+//#include <Servo.h>
+
+//SD card module setup. Change chipSelect to the digital pin you are using
+File myFile;
+/*Sd2Card card;
+SdVolume volume;
+SdFile root;*/
+int chipSelect = 5;
+ 
+//these are for file name creation change baseName to whatever name you want.
+//baseName cannot be longer than 6 charactars
+#define baseName "/flight"
+const uint8_t baseNameSize = sizeof(baseName) - 1;
+char fileName[] = baseName "00.csv";
+
+//how many second the program has been run for
+int secondsRun = 0;
+
+//values for voltage divider
+//adjust the inputAdjustment value if your voltage is not correct
+//float inputVoltage = 0.0;
+//const float inputAdjustment = 0.75;
+//const float voltageDivider = 2.0;
+
+//gps setup
+TinyGPS gps;
+SoftwareSerial ss(16, 17);//software serial pins RX,TX
+
+//gps variables
+//how many hours ahead or behind utc you are. Needs to be configured to display the correct time
+float timezone = 0;
+float flat, flon,speed,altitude;
+unsigned  long age, date, timee;
+int year;
+byte month, day, hour, minute, second, hundredths,satellites;
 
 // MPU VALUES
 #define SEALEVELPRESSURE_HPA (1018.8)
@@ -16,32 +50,6 @@ float accAngleX, accAngleY, gyroAngleX, gyroAngleY, gyroAngleZ;
 float roll, pitch, yaw;
 float AccErrorX, AccErrorY, GyroErrorX, GyroErrorY, GyroErrorZ;
 float elapsedTime, currentTime, previousTime;
-
-// BMP VALUES
-Adafruit_BMP3XX bmp;
-const int BMP = 0x77;
-float alt;
-
-// SD
-File myFile;
-Sd2Card card;
-SdVolume volume;
-SdFile root;
-const int chipSelect = 10;
-float secondsRun = 0;
-
-#define baseName "flight"
-const uint8_t baseNameSize = sizeof(baseName) - 1;
-char fileName[] = baseName "00.csv";
-
-// GPS
-TinyGPS gps;
-SoftwareSerial ss(4, 3);//software serial pins RX,TX
-float timezone = 0;
-float flat, flon,speed,altitude;
-unsigned long age, date, time;
-int year;
-byte month, day, hour, minute, second, hundredths,satellites;
 
 void setup() {
   Serial.begin(9600);
@@ -55,45 +63,51 @@ void setup() {
   Wire.write(0x1C);                  //Talk to the ACCEL_CONFIG register (1C hex)
   Wire.write(0x10);                  //Set the register bits as 00010000 (+/- 8g full scale range)
   Wire.endTransmission(true);
-  //while (!Serial);
   
-
-  /*if (!bmp.begin_I2C()) {   // hardware I2C mode, can pass in address & alt Wire
-  //if (! bmp.begin_SPI(BMP_CS)) {  // hardware SPI mode  
-  //if (! bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI)) {  // software SPI mode
-    Serial.println("Could not find a valid BMP3 sensor, check wiring!");
-    while (1);
-  }
-  // Set up oversampling and filter initialization
-  bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
-  bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
-  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
-  bmp.setOutputDataRate(BMP3_ODR_50_HZ);*/
-
   Serial.print("Simple TinyGPS library v. "); Serial.println(TinyGPS::library_version());
   Serial.println();
-  card.init(SPI_HALF_SPEED,chipSelect);//SD card initialization
-  if (SD.begin(chipSelect)){
-    Serial.println("SD card is ready to use.");
-  } 
-  else {
-    Serial.println("SD card initialization failed");
+  //SD card initialization
+  /*Serial.println(SS);
+  Serial.println(MOSI);
+  Serial.println(MISO);
+  Serial.println(SCK);*/
+  //pinMode(5, OUTPUT);
+  //digitalWrite(5, HIGH);
+  SPI.begin(18,19,23,chipSelect);
+  if (!SD.begin(chipSelect)) {
+    Serial.println("initialization failed!");
     return;
   }
+  
+  uint8_t cardType = SD.cardType();
+
+  if(cardType == CARD_NONE){
+    Serial.println("No SD card attached");
+    return;
+  }
+
+  /*Serial.print("SD Card Type: ");
+  if(cardType == CARD_MMC){
+    Serial.println("MMC");
+  } else if(cardType == CARD_SD){
+    Serial.println("SDSC");
+  } else if(cardType == CARD_SDHC){
+    Serial.println("SDHC");
+  } else {
+    Serial.println("UNKNOWN");
+  }
+
+  uint64_t cardSize = SD.cardSize() / (1024 * 1024);
+  Serial.printf("SD Card Size: %lluMB\n", cardSize);*/
   fileSetup();
 }
 
+
 void loop() {
+  {
   bool newData = false;
   unsigned long chars;
   unsigned short sentences, failed;
-  /*if (! bmp.performReading()) {
-    Serial.println("Failed to perform reading");
-    return;
-  }*/
-  //getAlt();
-  getAcc();
-  //getOrient();
   for (unsigned long start = millis(); millis() - start < 1000;)
   {
     while (ss.available())
@@ -101,28 +115,70 @@ void loop() {
       char c = ss.read();
       //Serial.write(c); // uncomment this line if you want to see the GPS data flowing
       if (gps.encode(c)) // Did a new valid sentence come in?
-        getGPS();
+        gpsValueUpdate();
      }
   }
+  //Serial.println("Recieved GPS Data");
+  if(satellites > 3){
+    //secondsRun++;
+    //batteryVoltage(); //call for battery voltage reading
+      //update the file
+  }
+  
+  gps.stats(&chars, &sentences, &failed);//check valid data is being recieved from gps
+  if (chars == 0)
+    Serial.println("** No characters received from GPS: check wiring **");
+  }
   updateFile();
- 
+
   Serial.print(AccX);
   Serial.print("/");
   Serial.print(AccY);
   Serial.print("/");
   Serial.println(AccZ);
-  //Serial.println(alt);
-  Serial.print(altitude);
-  Serial.print("/");
-  Serial.print(speed);
-  Serial.print("/");
-  Serial.print(satellites);
-  Serial.print("/");
-  Serial.print(flat == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : flat, 6);
-  Serial.print("/");
-  Serial.println(flon == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : flon, 6);
-  //delay(1000);
+  //delay(500);
 }
+
+
+void updateFile(){
+  //Serial.println("entered");
+  getAcc();
+  File myFile = SD.open(fileName, FILE_APPEND);
+  if (myFile) {
+    //Serial.println("updating");
+     //print all the data to the spreadsheet seperated by commas
+     //myFile.print(secondsRun);
+     //myFile.print(", ");
+     myFile.print(hour+timezone);
+     myFile.print(":");
+     myFile.print(minute);
+     myFile.print(":");
+     myFile.print(second);
+     myFile.print(", ");
+     myFile.print(AccX);
+     myFile.print(", ");
+     myFile.print(AccY);
+     myFile.print(", ");
+     myFile.print(AccZ);
+     myFile.print(", ");
+     //myFile.print(inputVoltage);
+     //myFile.print(",");
+     myFile.print(altitude);
+     myFile.print(",");
+     myFile.print(speed);
+     myFile.print(",");
+     myFile.print(satellites);
+     myFile.print(",");
+     myFile.print(flat == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : flat, 6);
+     myFile.print(",");
+     myFile.println(flon == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : flon, 6);
+     //Serial.println("updated");
+  }else{
+    Serial.println("Write failure");
+  }
+  myFile.close();
+}
+
 
 void fileSetup(){
   //name creation
@@ -137,48 +193,34 @@ void fileSetup(){
       return;
     }
   }
-  myFile = SD.open(fileName, FILE_WRITE);
-  myFile.println("Time,AccX,AccY,AccZ,Altitude(m),Speed,Satellites,Latitude,Longitude");//,Time,GPS Altitude,Speed,GPS Sats,Lat,Long");//column labeling
+  File myFile = SD.open(fileName, FILE_APPEND);
+  myFile.println("");
+  myFile.println("Time,AccX,AccY,AccZ,Altitude,Speed,Gps Sats,Lat,Long");//column labeling
   myFile.close();
+  Serial.println("File Created");
 }
 
-void updateFile(){
-  myFile = SD.open(fileName, FILE_WRITE);
-  if (myFile) {
-     //myFile.print(secondsRun);
-     //myFile.print(", ");
-     myFile.print(hour+timezone);
-     myFile.print(":");
-     myFile.print(minute);
-     myFile.print(":");
-     myFile.print(second);
-     myFile.print(",");
-     myFile.print(AccX);
-     myFile.print(",");
-     myFile.print(AccY);
-     myFile.print(",");
-     myFile.print(AccZ);
-     myFile.print(",");
-     //myFile.print(alt);
-     //myFile.print(", ");
-     myFile.print(altitude);
-     myFile.print(",");
-     myFile.print(speed);
-     myFile.print(",");
-     myFile.print(satellites);
-     myFile.print(",");
-     myFile.print(flat == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : flat, 6);
-     myFile.print(",");
-     myFile.println(flon == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : flon, 6);
-  }else{
-    Serial.println("Write failure");
+/*void batteryVoltage(){
+  int analog_value = analogRead(A3);//get analog voltage from voltage divider
+  inputVoltage = (analog_value * 5.0) / 1024.0; //calculate voltage from analog value
+  if (analog_value < 460){
+    inputVoltage = 0.0;
   }
-  myFile.close();
-}
 
-/*void getAlt(){
-  alt = bmp.readAltitude(SEALEVELPRESSURE_HPA);
-}*/
+  else{
+    inputVoltage *= voltageDivider; //apply voltage divider
+    inputVoltage += inputAdjustment;  //apply voltage inputAdjustment
+  }
+}
+*/
+void gpsValueUpdate(){
+  gps.f_get_position(&flat, &flon);
+  satellites = gps.satellites() == TinyGPS::GPS_INVALID_SATELLITES ? 0 : gps.satellites();//get number of GPS satellites
+  speed = gps.f_speed_mps();  //get speed. I am using mp/s but this can be changed to f_speed_mph or f_speed_kmh for difrent units
+  altitude = gps.altitude()/100; //Get altitude from GPD
+  gps.get_datetime(&date, &timee, &age);
+  gps.crack_datetime(&year, &month, &day, &hour, &minute, &second, &hundredths, &age); //update time from GPS
+}
 
 void getAcc(){
   Wire.beginTransmission(MPU);
@@ -189,37 +231,4 @@ void getAcc(){
   AccX = (Wire.read() << 8 | Wire.read()) / 4096.0; // X-axis value
   AccY = (Wire.read() << 8 | Wire.read()) / 4096.0; // Y-axis value
   AccZ = (Wire.read() << 8 | Wire.read()) / 4096.0; // Z-axis value 
-}
-
-void getOrient(){
-  previousTime = currentTime;        // Previous time is stored before the actual time read
-  currentTime = millis();            // Current time actual time read
-  elapsedTime = (currentTime - previousTime) / 1000; // Divide by 1000 to get seconds
-  Wire.beginTransmission(MPU);
-  Wire.write(0x43); // Gyro data first register address 0x43
-  Wire.endTransmission(false);
-  Wire.requestFrom(MPU, 6, true); // Read 4 registers total, each axis value is stored in 2 registers
-  GyroX = (Wire.read() << 8 | Wire.read()) / 131.0; // For a 250deg/s range we have to divide first the raw value by 131.0, according to the datasheet
-  GyroY = (Wire.read() << 8 | Wire.read()) / 131.0;
-  GyroZ = (Wire.read() << 8 | Wire.read()) / 131.0;
-  // Correct the outputs with the calculated error values
-  GyroX = GyroX + 0.56; // GyroErrorX ~(-0.56)
-  GyroY = GyroY - 2; // GyroErrorY ~(2)
-  GyroZ = GyroZ + 0.79; // GyroErrorZ ~ (-0.8)
-  // Currently the raw values are in degrees per seconds, deg/s, so we need to multiply by sendonds (s) to get the angle in degrees
-  gyroAngleX = gyroAngleX + GyroX;// * elapsedTime; // deg/s * s = deg
-  gyroAngleY = gyroAngleY + GyroY;// * elapsedTime;
-  yaw =  yaw + GyroZ * elapsedTime;
-  // Complementary filter - combine acceleromter and gyro angle values
-  roll = 0.96 * gyroAngleX + 0.04 * accAngleX;
-  pitch = 0.96 * gyroAngleY + 0.04 * accAngleY;
-}
-
-void getGPS(){
-  gps.f_get_position(&flat, &flon);
-  satellites = gps.satellites() == TinyGPS::GPS_INVALID_SATELLITES ? 0 : gps.satellites();//get number of GPS satellites
-  speed = gps.f_speed_mps();  //get speed. I am using mp/s but this can be changed to f_speed_mph or f_speed_kmh for difrent units
-  altitude = gps.altitude()/100; //Get altitude from GPD
-  gps.get_datetime(&date, &time, &age);
-  gps.crack_datetime(&year, &month, &day, &hour, &minute, &second, &hundredths, &age); //update time from GPS
 }
